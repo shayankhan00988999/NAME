@@ -1,0 +1,52 @@
+workflows:
+  android-build:
+    name: Shayan Pharma Guide - Android
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      # No android_signing block here on purpose — this builds an
+      # unsigned/testing APK. Add a keystore under Codemagic > Team
+      # settings > Code signing identities later if you need a
+      # signed release build for the Play Store.
+    scripts:
+      - name: Generate missing platform files
+        script: |
+          rm -rf android
+          flutter create . --platforms=android --project-name shayan_pharma_guide --org com.shayanpharmaguide
+      - name: Ensure INTERNET permission is declared
+        script: |
+          python3 - <<'PYEOF'
+          import re
+          path = "android/app/src/main/AndroidManifest.xml"
+          with open(path) as f:
+              content = f.read()
+          if "android.permission.INTERNET" not in content:
+              content = re.sub(
+                  r'(<manifest[^>]*>)',
+                  r'\1\n    <uses-permission android:name="android.permission.INTERNET"/>',
+                  content,
+                  count=1,
+              )
+              with open(path, "w") as f:
+                  f.write(content)
+          print(open(path).read())
+          PYEOF
+      - name: Get Flutter packages
+        script: flutter packages pub get
+      - name: Generate custom app icon
+        script: dart run flutter_launcher_icons
+      - name: Build APK (release)
+        script: flutter build apk --release
+      - name: Zip the build output
+        script: |
+          mkdir -p build_output
+          cp build/app/outputs/flutter-apk/app-release.apk build_output/
+          cd build_output
+          zip -r shayan_pharma_guide_android.zip app-release.apk
+    artifacts:
+      - build_output/shayan_pharma_guide_android.zip
+      - build/app/outputs/flutter-apk/app-release.apk
+    publishing:
+      email:
+        recipients:
+          - shayankhandurrani00@gmail.com
